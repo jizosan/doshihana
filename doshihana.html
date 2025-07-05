@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>インタラクティブ生態報告書：ドシハナ科の分類</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Harmony (ベージュ、ブラウン、グリーン) -->
+    <!-- Application Structure Plan: タブベースのダッシュボード構造を採用。利用者は「ドシハナ」「ドシナシドシハナ」「ドシアリドシナシドシハナ」のタブを切り替えることで、各タイプの詳細情報（解説テキスト、特性レーダーチャート）をインタラクティブに表示・比較できる。下にスクロールすると、全体の分類体系図と個体数グラフが表示され、ミクロとマクロの視点を提供する。この構造は、静的な報告書を探索的な学習体験に変えるために選択された。利用者は能動的に情報を切り替え、比較することで、各種間の微妙な差異を深く理解できる。 -->
+    <!-- Visualization & Content Choices: 
+        - 分類比較 -> Goal:比較 -> Viz:タブナビゲーション(HTML/JS) -> Interaction:クリックで表示切替 -> Justification:3種の明確な比較と詳細表示に最適。
+        - 特性比較 -> Goal:比較/情報 -> Viz:レーダーチャート(Chart.js/Canvas) -> Interaction:ホバーで詳細表示 -> Justification:複数の質的特性（積極性、受動性等）を一つの視覚情報に統合し、タイプの個性を直感的に示す。
+        - 階層関係 -> Goal:整理 -> Viz:階層図(HTML/CSS Flexbox) -> Interaction:静的表示 -> Justification:SVG等を使わずに進化/分類関係を明確に示すための最良の手段。
+        - 個体数データ -> Goal:情報 -> Viz:棒グラフ(Chart.js/Canvas) -> Interaction:ホバーで詳細表示 -> Justification:唯一の定量的データ「男女比」を明快に表現。
+        - 詳細情報 -> Goal:情報 -> Viz:テキストブロック(HTML/JS) -> Interaction:タブに連動して更新 -> Justification:各タイプの詳細な生態を解説する。
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #FDFBF5;
+            color: #3a3a3a;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .tab {
+            transition: all 0.3s ease-in-out;
+        }
+        .tab.active {
+            border-color: #8FBC8F;
+            background-color: #F0F5F0;
+            color: #2E8B57;
+            font-weight: 700;
+        }
+        .flow-chart-box {
+            border: 2px solid #D2B48C;
+            background-color: #FFF8E7;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            width: 90%;
+            max-width: 300px;
+            margin: 0 auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .flow-arrow {
+            font-size: 2rem;
+            color: #D2B48C;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-[#A0522D]">インタラクティブ生態報告書</h1>
+            <p class="text-lg md:text-xl text-gray-600 mt-2">ドシハナ科の分類と比較生態学</p>
+        </header>
+
+        <main>
+            <!-- 分類タブセクション -->
+            <section id="classification" class="mb-8 md:mb-12">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-center mb-2 text-[#A0522D]">種の選択</h2>
+                    <p class="text-center text-gray-600 max-w-2xl mx-auto">以下のタブを選択して、各種の詳細な生態情報を表示します。特性レーダーチャートと解説が連動して切り替わります。</p>
+                </div>
+                <div class="flex justify-center border-b-2 border-gray-200 mb-6">
+                    <button class="tab py-3 px-6 border-b-4 border-transparent text-gray-600" data-type="doshihana">ドシハナ</button>
+                    <button class="tab py-3 px-6 border-b-4 border-transparent text-gray-600" data-type="doshinashi">ドシナシドシハナ</button>
+                    <button class="tab py-3 px-6 border-b-4 border-transparent text-gray-600 active" data-type="doshiari">ドシアリドシナシドシハナ</button>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-8 items-center bg-white p-6 rounded-xl shadow-lg">
+                    <div class="order-2 md:order-1">
+                        <h3 id="type-name" class="text-2xl font-bold mb-1 text-gray-800"></h3>
+                        <p id="type-scientific-name" class="text-md italic text-gray-500 mb-4"></p>
+                        <p id="type-description" class="text-gray-700 leading-relaxed"></p>
+                    </div>
+                    <div class="order-1 md:order-2">
+                        <div class="chart-container">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 分類体系図セクション -->
+            <section id="taxonomy" class="mb-8 md:mb-12 py-8 bg-stone-50 rounded-xl">
+                 <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-center mb-2 text-[#A0522D]">分類体系図</h2>
+                    <p class="text-center text-gray-600 max-w-2xl mx-auto">ドシハナ科の階層的な関係性を視覚的に示します。各種がどのように分化していったかの流れを理解することができます。</p>
+                </div>
+                <div class="flex flex-col items-center space-y-4">
+                    <div class="flow-chart-box">
+                        <h4 class="font-bold">ドシハナ</h4>
+                        <p class="text-sm italic">Homo sapiens animus ulterior</p>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-chart-box">
+                        <h4 class="font-bold">ドシナシドシハナ</h4>
+                        <p class="text-sm italic">H. s. animus ulterior passivus</p>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-chart-box border-[#8FBC8F] bg-[#F0F5F0]">
+                        <h4 class="font-bold">ドシアリドシナシドシハナ</h4>
+                        <p class="text-sm italic">Subspecies of H. s. animus ulterior passivus</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 個体数グラフセクション -->
+            <section id="population" class="py-8">
+                 <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-center mb-2 text-[#A0522D]">個体数に関する報告</h2>
+                    <p class="text-center text-gray-600 max-w-2xl mx-auto">ドシハナ科全体で報告されている性別比の傾向をグラフで示します。このデータにはさらなる検証が求められています。</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="chart-container" style="max-height: 300px;">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center mt-12 pt-6 border-t border-gray-200">
+            <p class="text-gray-500 text-sm">© 2025 現代人行動生態学研究所. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        const typeData = {
+            doshihana: {
+                name: 'ドシハナ',
+                scientificName: 'Homo sapiens animus ulterior',
+                description: '「どしたん？（どうしたの？の意）」と積極的に他者に話しかけ、悩みや相談事を聞き出す姿勢を見せる。その行動原理は明確な下心にあり、目的達成のため能動的に行動する基本種。',
+                stats: [5, 1, 5, 3]
+            },
+            doshinashi: {
+                name: 'ドシナシドシハナ',
+                scientificName: 'H. s. animus ulterior passivus',
+                description: 'ドシハナの亜種。同じく下心を原動力とするが、自ら積極的に話しかけることは稀。しかし、その物腰や雰囲気から他者に「相談しやすい」と感じさせる特異な性質を持ち、受動的な生態を特徴とする。',
+                stats: [1, 5, 5, 2]
+            },
+            doshiari: {
+                name: 'ドシアリドシナシドシハナ',
+                scientificName: 'Subspecies of H. s. animus ulterior passivus',
+                description: 'ドシナシドシハナが持つ「相談されやすい性質」を保持しつつ、ドシハナのように積極的に話を聞きに行く行動も見せる複合種。高度な擬態により下心を悟らせないが、それが故に本来の目的を達成できずに生涯を終える個体も少なくない。',
+                stats: [4, 4, 5, 1]
+            }
+        };
+
+        let radarChart, barChart;
+        
+        const chartLabels = ['積極性 (聞く力)', '受動性 (聞かれる力)', '下心 (原動力)', '目的達成率'];
+        const chartOptions = {
+            maintainAspectRatio: false,
+            responsive: true,
+            scales: {
+                r: {
+                    angleLines: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    pointLabels: {
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        },
+                        color: '#3a3a3a'
+                    },
+                    suggestedMin: 0,
+                    suggestedMax: 5,
+                    ticks: {
+                        stepSize: 1,
+                        backdropColor: 'transparent',
+                        color: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.r !== null) {
+                                label += context.parsed.r;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        };
+
+        function updateView(type) {
+            const data = typeData[type];
+            document.getElementById('type-name').textContent = data.name;
+            document.getElementById('type-scientific-name').textContent = data.scientificName;
+            document.getElementById('type-description').textContent = data.description;
+
+            radarChart.data.datasets[0].data = data.stats;
+            radarChart.update();
+            
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`.tab[data-type="${type}"]`).classList.add('active');
+        }
+
+        window.onload = function() {
+            const radarCtx = document.getElementById('radarChart').getContext('2d');
+            radarChart = new Chart(radarCtx, {
+                type: 'radar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: '特性値',
+                        data: typeData['doshiari'].stats,
+                        fill: true,
+                        backgroundColor: 'rgba(143, 188, 143, 0.2)',
+                        borderColor: 'rgb(143, 188, 143)',
+                        pointBackgroundColor: 'rgb(143, 188, 143)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(143, 188, 143)'
+                    }]
+                },
+                options: chartOptions
+            });
+
+            const barCtx = document.getElementById('barChart').getContext('2d');
+            barChart = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['男性', '女性'],
+                    datasets: [{
+                        label: '報告個体数 (相対値)',
+                        data: [8, 5],
+                        backgroundColor: [
+                            'rgba(160, 82, 45, 0.6)',
+                            'rgba(210, 180, 140, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgb(160, 82, 45)',
+                            'rgb(210, 180, 140)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                        title: {
+                            display: true,
+                            text: 'ドシハナ科の性別報告比 [要出典]',
+                            font: { size: 16 }
+                        }
+                    }
+                }
+            });
+            
+            updateView('doshiari');
+
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    updateView(e.target.dataset.type);
+                });
+            });
+        };
+    </script>
+</body>
+</html>
